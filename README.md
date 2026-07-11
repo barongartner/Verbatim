@@ -1,10 +1,13 @@
+<img src="assets/banner.svg" alt="Verbatim — every word • every speaker • on your machine" width="100%" />
+
 # Verbatim
 
 **Every word, on your machine.** Free, private, offline audio transcription for
 Windows and macOS — with automatic speaker identification.
 
-Drop in an MP3, WAV, M4A, AAC, FLAC, OGG, OPUS, or WEBM recording and Verbatim
-gives you a searchable, clickable transcript:
+Drop in an MP3, WAV, M4A, AAC, FLAC, OGG, OPUS, or WEBM recording — **or paste
+a YouTube/podcast/any audio link** — and Verbatim gives you a searchable,
+clickable transcript:
 
 - **Speaker detection** — figures out who spoke when, and you can give each
   speaker a real name (applies across the whole transcript).
@@ -15,8 +18,16 @@ gives you a searchable, clickable transcript:
 - **Edit** — double-click any line to fix a mis-heard word; rename the
   transcript; everything auto-saves to your library.
 - **Export** — TXT, SRT, VTT, or JSON, or copy the whole transcript.
-- **100% local** — audio never leaves your computer. No account, no cloud,
-  no fees.
+- **Transcribe from a link** — paste a YouTube URL, podcast episode, or any
+  direct audio/video link; Verbatim fetches the audio (via
+  [yt-dlp](https://github.com/yt-dlp/yt-dlp), downloaded on first use) and
+  transcribes it like any local file.
+- **100% local transcription** — audio never leaves your computer. No account,
+  no cloud, no fees. Network is used only for one-time model downloads and
+  links you explicitly paste.
+
+<img src="assets/transcript.png" alt="A transcript in Verbatim: named speakers Sarah and David, search matches highlighted, waveform player" width="100%" />
+<img src="assets/home.png" alt="Verbatim home screen: drop zone, link transcription, and the transcript library" width="100%" />
 
 ## How it works
 

@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { ModelManager } = require('./src/main/models');
 const pipeline = require('./src/main/pipeline');
+const urlfetch = require('./src/main/urlfetch');
 
 let win = null;
 let modelManager = null;
@@ -13,6 +14,8 @@ let modelManager = null;
 const userDir = () => app.getPath('userData');
 const settingsPath = () => path.join(userDir(), 'settings.json');
 const transcriptsDir = () => path.join(userDir(), 'transcripts');
+const toolsDir = () => path.join(userDir(), 'tools');
+const mediaDir = () => path.join(userDir(), 'media');
 
 const DEFAULT_SETTINGS = { model: 'whisper-base', language: '', numSpeakers: 0 };
 
@@ -74,6 +77,46 @@ function libraryList() {
 
 const validProjectId = (id) => typeof id === 'string' && /^[a-f0-9]{16}$/.test(id);
 
+// Set of audio paths referenced by any saved transcript (resolved).
+function referencedAudioPaths(excludeId) {
+  const refs = new Set();
+  let files = [];
+  try { files = fs.readdirSync(transcriptsDir()).filter((f) => f.endsWith('.json')); } catch { return refs; }
+  for (const f of files) {
+    if (excludeId && f === `${excludeId}.json`) continue;
+    try {
+      const p = JSON.parse(fs.readFileSync(path.join(transcriptsDir(), f), 'utf8'));
+      if (p && typeof p.audioPath === 'string' && p.audioPath) refs.add(path.resolve(p.audioPath));
+    } catch { /* unreadable transcript */ }
+  }
+  return refs;
+}
+
+const inMediaDir = (p) => !!p && path.resolve(String(p)).startsWith(mediaDir() + path.sep);
+
+// Deletes a file in OUR media dir, but only when no saved transcript still
+// points at it (exports/imports can share one fetched file).
+async function discardMediaIfUnreferenced(p, excludeId) {
+  if (!inMediaDir(p)) return;
+  const resolved = path.resolve(String(p));
+  if (referencedAudioPaths(excludeId).has(resolved)) return;
+  await fs.promises.rm(resolved, { force: true }).catch(() => {});
+}
+
+// Startup sweep: fetched audio that lost its transcript (cancelled runs,
+// crashes) plus downloader journal files must not pile up invisibly.
+function sweepMediaDir() {
+  let files = [];
+  try { files = fs.readdirSync(mediaDir()); } catch { return; }
+  const refs = referencedAudioPaths();
+  for (const f of files) {
+    const full = path.join(mediaDir(), f);
+    if (f.endsWith('.part') || f.endsWith('.ytdl') || !refs.has(path.resolve(full))) {
+      fs.promises.rm(full, { force: true }).catch(() => {});
+    }
+  }
+}
+
 function projectFile(id) {
   if (!validProjectId(id)) throw new Error('Bad project id');
   return path.join(transcriptsDir(), `${id}.json`);
@@ -81,6 +124,7 @@ function projectFile(id) {
 
 // ------------------------------------------------------------ transcription --
 const jobState = { signal: null, child: null, tempDir: null };
+const urlJob = { signal: null, child: null };
 
 async function handleTranscribe(_e, { pcm, options }) {
   if (jobState.signal) throw new Error('A transcription is already running');
@@ -132,6 +176,7 @@ function registerIpc() {
     platform: process.platform,
     version: app.getVersion(),
     testAudioPath: (!app.isPackaged && process.env.VERBATIM_TEST_AUDIO) || null,
+    mediaDir: mediaDir(),
     modelsDir: path.join(userDir(), 'models'),
     modelStorageBytes: await modelManager.storageBytes()
   }));
@@ -158,7 +203,8 @@ function registerIpc() {
   // Only media (for playback of a project's linked audio) and JSON projects —
   // never a general file-read primitive.
   const READABLE = new Set(['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'oga', 'opus',
-    'webm', 'mp4', 'aiff', 'aif', 'caf', 'wma', 'amr', '3gp', 'json']);
+    'webm', 'weba', 'mp4', 'm4b', 'mkv', 'mka', 'mov', 'flv', 'ts', 'aiff', 'aif',
+    'caf', 'wma', 'amr', '3gp', 'json']);
   ipcMain.handle('file:read', async (_e, filePath) => {
     const ext = path.extname(String(filePath)).slice(1).toLowerCase();
     if (!READABLE.has(ext)) throw new Error('Unsupported file type');
@@ -192,7 +238,16 @@ function registerIpc() {
   });
 
   ipcMain.handle('project:delete', async (_e, id) => {
-    await fs.promises.rm(projectFile(id), { force: true });
+    const file = projectFile(id);
+    // Audio fetched from a URL lives in our media dir and belongs to its
+    // transcript(s) — remove it when the last one goes. User files are never
+    // touched.
+    let audioPath = null;
+    try {
+      audioPath = JSON.parse(await fs.promises.readFile(file, 'utf8')).audioPath || null;
+    } catch { /* transcript unreadable — still delete it */ }
+    await fs.promises.rm(file, { force: true });
+    if (audioPath) await discardMediaIfUnreferenced(audioPath, id);
     return libraryList();
   });
 
@@ -217,6 +272,65 @@ function registerIpc() {
 
   ipcMain.handle('shell:showFolder', (_e, p) => shell.showItemInFolder(p));
   ipcMain.handle('shell:openModelsFolder', () => shell.openPath(path.join(userDir(), 'models')));
+
+  // ------------------------------------------------------------ url fetch --
+  ipcMain.handle('url:fetch', async (_e, url) => {
+    if (urlJob.signal) throw new Error('A link is already being fetched');
+    const signal = { cancelled: false };
+    urlJob.signal = signal;
+    try {
+      return await urlfetch.fetchUrl({
+        url,
+        toolsDir: toolsDir(),
+        mediaDir: mediaDir(),
+        signal,
+        track: (child) => { urlJob.child = child; },
+        onProgress: (p) => {
+          if (win && !win.isDestroyed()) win.webContents.send('url:progress', p);
+        }
+      });
+    } finally {
+      urlJob.signal = null;
+      urlJob.child = null;
+    }
+  });
+
+  ipcMain.handle('url:cancel', () => {
+    if (urlJob.signal) {
+      urlJob.signal.cancelled = true;
+      if (urlJob.signal.abort) urlJob.signal.abort();
+    }
+    urlfetch.killTree(urlJob.child);
+    return true;
+  });
+
+  ipcMain.handle('url:toolInfo', async () => ({
+    version: await urlfetch.toolVersion(toolsDir())
+  }));
+
+  // Shares the urlJob lock with url:fetch so Update can never race a fetch's
+  // first-use download of the same binary (two writers on one .part file).
+  ipcMain.handle('url:toolUpdate', async () => {
+    if (urlJob.signal) throw new Error('A link is being fetched — try again in a moment');
+    const signal = { cancelled: false };
+    urlJob.signal = signal;
+    try {
+      return await urlfetch.updateTool(toolsDir(), (p) => {
+        if (win && !win.isDestroyed()) win.webContents.send('url:progress', p);
+      }, signal, (child) => { urlJob.child = child; });
+    } finally {
+      urlJob.signal = null;
+      urlJob.child = null;
+    }
+  });
+
+  // Lets the renderer drop a fetched file whose transcription never became a
+  // saved project. Restricted to our own media dir and refcounted against the
+  // library, like project:delete.
+  ipcMain.handle('media:discard', async (_e, p) => {
+    await discardMediaIfUnreferenced(p);
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------- window --
@@ -241,13 +355,16 @@ function createWindow() {
   win.on('closed', () => {
     win = null;
     // A job whose window is gone can neither report nor be cancelled — stop it.
-    if (jobState.signal) {
-      jobState.signal.cancelled = true;
-      if (jobState.signal.abort) jobState.signal.abort();
+    for (const job of [jobState, urlJob]) {
+      if (job.signal) {
+        job.signal.cancelled = true;
+        if (job.signal.abort) job.signal.abort();
+      }
     }
     if (jobState.child) {
       try { jobState.child.kill('SIGKILL'); } catch { /* already gone */ }
     }
+    urlfetch.killTree(urlJob.child);
   });
 }
 
@@ -265,6 +382,7 @@ if (!app.requestSingleInstanceLock()) {
 app.whenReady().then(() => {
   modelManager = new ModelManager(path.join(userDir(), 'models'));
   registerIpc();
+  sweepMediaDir();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -278,10 +396,13 @@ app.on('window-all-closed', () => {
 // Don't leave transcriber processes or temp wavs behind if the user quits
 // mid-transcription.
 app.on('before-quit', () => {
-  if (jobState.signal) jobState.signal.cancelled = true;
+  for (const job of [jobState, urlJob]) {
+    if (job.signal) job.signal.cancelled = true;
+  }
   if (jobState.child) {
     try { jobState.child.kill('SIGKILL'); } catch { /* already gone */ }
   }
+  urlfetch.killTree(urlJob.child);
   if (jobState.tempDir) {
     try { fs.rmSync(jobState.tempDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }

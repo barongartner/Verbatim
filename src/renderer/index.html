@@ -38,6 +38,12 @@
     </div>
     <input type="file" id="file-input" accept="audio/*,video/webm,.mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.webm,.mp4" hidden />
 
+    <div id="url-row">
+      <input id="url-input" type="text" spellcheck="false"
+             placeholder="&hellip;or paste a link — YouTube, podcast, or any audio/video URL" />
+      <button id="btn-url" class="primary">Transcribe link</button>
+    </div>
+
     <div class="home-actions">
       <button id="btn-open-project" class="ghost">Open saved transcript&hellip;</button>
       <button id="btn-settings" class="ghost">Settings</button>
@@ -137,6 +143,11 @@
       <label>Model storage</label>
       <span id="storage-info" class="dim"></span>
       <button id="btn-models-folder" class="linklike">Open folder</button>
+    </div>
+    <div class="settings-row">
+      <label>Link downloader</label>
+      <span id="ytdlp-info" class="dim"></span>
+      <button id="btn-ytdlp-update" class="linklike">Update</button>
     </div>
     <div class="modal-footer">
       <span class="dim" id="about-line"></span>

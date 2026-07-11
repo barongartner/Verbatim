@@ -200,6 +200,11 @@ async function transcribe(opts) {
     for (let j = 0; j < batchSegs.length; j++) {
       const text = results[j].text;
       if (!text || /^[\s.\-,]*$/.test(text)) continue;
+      // whisper's non-speech markers ("[Music]", "(applause)", "♪♪") aren't dialogue
+      const trimmed = text.trim();
+      const marker = /^[[(][^\])]{0,40}[\])]$/.test(trimmed) &&
+        /music|applause|noise|silence|laughter|inaudible/i.test(trimmed);
+      if (marker || /^[♪♩♫♬\s]+$/.test(trimmed)) continue;
       rows.push({
         start: round2(batchSegs[j].start),
         end: round2(batchSegs[j].end),

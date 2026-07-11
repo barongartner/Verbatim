@@ -16,6 +16,15 @@ contextBridge.exposeInMainWorld('verbatim', {
     ipcRenderer.on('models:progress', (_e, p) => cb(p));
   },
 
+  fetchUrl: (url) => ipcRenderer.invoke('url:fetch', url),
+  cancelUrlFetch: () => ipcRenderer.invoke('url:cancel'),
+  onUrlProgress: (cb) => {
+    ipcRenderer.on('url:progress', (_e, p) => cb(p));
+  },
+  urlToolInfo: () => ipcRenderer.invoke('url:toolInfo'),
+  urlToolUpdate: () => ipcRenderer.invoke('url:toolUpdate'),
+  discardMedia: (p) => ipcRenderer.invoke('media:discard', p),
+
   readFile: (path) => ipcRenderer.invoke('file:read', path),
   saveTextFile: (opts) => ipcRenderer.invoke('file:saveText', opts),
 

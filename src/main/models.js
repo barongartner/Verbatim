@@ -309,4 +309,4 @@ function extractTarBz2(tarPath, destDir) {
   });
 }
 
-module.exports = { ModelManager, WHISPER_MODELS, SEGMENTATION, EMBEDDING };
+module.exports = { ModelManager, WHISPER_MODELS, SEGMENTATION, EMBEDDING, downloadWithRetry };

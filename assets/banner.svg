@@ -1,0 +1,38 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Verbatim — every word • every speaker • on your machine">
+<defs>
+<linearGradient id="verbatim-bg" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#13131a"/><stop offset="1" stop-color="#1c182c"/></linearGradient>
+<radialGradient id="verbatim-glow" cx="219.5" cy="180.5" r="250" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#4cc2ff" stop-opacity="0.20"/>
+<stop offset="1" stop-color="#4cc2ff" stop-opacity="0"/></radialGradient>
+<linearGradient id="verbatim-icon" x1="126" y1="87" x2="313" y2="274" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#7fd8ff"/><stop offset="1" stop-color="#1e6fa8"/></linearGradient>
+<linearGradient id="verbatim-sheen" x1="126" y1="87" x2="222" y2="213" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+<filter id="verbatim-ds" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+<feDropShadow dx="0" dy="7" stdDeviation="11" flood-color="#000000" flood-opacity="0.33"/></filter>
+<linearGradient id="verbatim-title" x1="371" y1="118" x2="371" y2="190" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d7d7e2"/></linearGradient>
+</defs>
+<rect width="1200" height="360" fill="url(#verbatim-bg)"/>
+<rect width="1200" height="360" fill="url(#verbatim-glow)"/>
+<g fill="none" stroke="#4cc2ff" stroke-opacity="0.11" stroke-width="8" stroke-linecap="round">
+<path d="M1074,110 a86,86 0 0 1 0,140"/>
+<path d="M1114,80 a136,136 0 0 1 0,200"/>
+<path d="M1154,50 a186,186 0 0 1 0,260"/>
+</g>
+<rect x="126" y="87" width="187" height="187" rx="30" fill="url(#verbatim-icon)" filter="url(#verbatim-ds)"/>
+<rect x="126" y="87" width="187" height="187" rx="30" fill="url(#verbatim-sheen)"/>
+<rect x="126.75" y="87.75" width="185.5" height="185.5" rx="29.25" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.5"/>
+<g fill="#ffffff">
+<rect x="155" y="163" width="12" height="29" rx="6"/>
+<rect x="176" y="147" width="12" height="61" rx="6"/>
+<rect x="197" y="128" width="12" height="99" rx="6"/>
+<rect x="218" y="141" width="12" height="73" rx="6"/>
+<rect x="239" y="158" width="12" height="39" rx="6"/>
+<rect x="260" y="167" width="12" height="21" rx="6"/>
+</g>
+<circle cx="203" cy="243" r="6.5" fill="#ffffff"/>
+<text x="371" y="187" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="88" font-weight="800" letter-spacing="-1" fill="url(#verbatim-title)">Verbatim</text>
+<text x="366" y="248" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="500" fill="#8b8b9a">every word • every speaker • on your machine</text>
+</svg>

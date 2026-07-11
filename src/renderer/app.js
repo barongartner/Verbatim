@@ -6,6 +6,8 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
   viewHome: $('view-home'), viewProgress: $('view-progress'), viewTranscript: $('view-transcript'),
+  urlInput: $('url-input'), btnUrl: $('btn-url'),
+  ytdlpInfo: $('ytdlp-info'), btnYtdlpUpdate: $('btn-ytdlp-update'),
   dropzone: $('dropzone'), fileInput: $('file-input'), btnOpen: $('btn-open'),
   btnOpenProject: $('btn-open-project'), btnSettings: $('btn-settings'),
   librarySection: $('library-section'), libraryList: $('library-list'),
@@ -45,6 +47,7 @@ const state = {
   project: null,
   audioAvailable: false,
   transcribing: false,
+  fetchingUrl: false,
   prepareCancelled: false,
   follow: true,
   search: { query: '', matches: [], current: -1 },
@@ -183,6 +186,61 @@ function transcribeFile(file) {
   return transcribeBlob(file, file.name, window.verbatim.pathForFile(file) || '');
 }
 
+const busy = () => state.transcribing || state.fetchingUrl;
+
+async function transcribeUrl(rawUrl) {
+  if (busy()) return;
+  const url = String(rawUrl || '').trim();
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    toast('Paste a full link starting with http:// or https://');
+    return;
+  }
+  state.fetchingUrl = true;
+  state.prepareCancelled = false;
+  els.progFile.textContent = url;
+  els.modelDl.hidden = true;
+  els.modelDlItems.innerHTML = '';
+  setProgress('Fetching audio…', 1, '');
+  showView('progress');
+  let fetched = null;
+  try {
+    fetched = await window.verbatim.fetchUrl(url);
+    // stay in "fetching" state through the (multi-second for big files)
+    // readFile IPC so a Cancel click in this window still lands
+    const bytes = await window.verbatim.readFile(fetched.filePath);
+    state.fetchingUrl = false;
+    if (state.prepareCancelled) throw new Error('cancelled');
+    const saved = await transcribeBlob(
+      new Blob([bytes]),
+      `${fetched.title}.${fetched.ext}`,
+      fetched.filePath,
+      fetched.title
+    );
+    if (saved) {
+      els.urlInput.value = '';
+    } else {
+      // no transcript kept this audio — don't strand it in our media dir
+      window.verbatim.discardMedia(fetched.filePath).catch(() => {});
+    }
+  } catch (err) {
+    if (fetched) window.verbatim.discardMedia(fetched.filePath).catch(() => {});
+    const msg = String(err && err.message || err);
+    if (/cancelled/i.test(msg)) toast('Cancelled');
+    else toast(`Could not fetch that link: ${msg.split('\n')[0].replace(/^.*Error: /, '')}`, 7000);
+    showView('home');
+    refreshHome();
+  } finally {
+    state.fetchingUrl = false;
+  }
+}
+
+window.verbatim.onUrlProgress((p) => {
+  if (!state.fetchingUrl) return;
+  if (p.stage === 'tool') setProgress('Getting the link downloader (one time)…', p.pct, '');
+  else if (p.stage === 'probe') setProgress('Reading the link…', 2, '');
+  else if (p.stage === 'download') setProgress('Fetching audio…', p.pct, p.detail || '');
+});
+
 // Reads duration from container metadata without decoding the whole file, so
 // over-long files are rejected before the memory-hungry decode.
 function probeDuration(file) {
@@ -208,7 +266,7 @@ const cancelledDuringPrepare = () => {
   if (state.prepareCancelled) throw new Error('cancelled');
 };
 
-async function transcribeBlob(file, fileName, filePath) {
+async function transcribeBlob(file, fileName, filePath, displayTitle) {
   if (state.transcribing) return;
   state.transcribing = true;
   state.prepareCancelled = false;
@@ -240,7 +298,7 @@ async function transcribeBlob(file, fileName, filePath) {
       toast('No speech was found in that audio', 5000);
       showView('home');
       refreshHome();
-      return;
+      return false;
     }
 
     const speakers = {};
@@ -254,7 +312,7 @@ async function transcribeBlob(file, fileName, filePath) {
       id: null,
       app: 'verbatim',
       appVersion: state.version,
-      title: fileName.replace(/\.[^.]+$/, ''),
+      title: displayTitle || fileName.replace(/\.[^.]+$/, ''),
       audioName: fileName,
       audioPath: filePath,
       durationSec: result.durationSec || duration,
@@ -269,12 +327,14 @@ async function transcribeBlob(file, fileName, filePath) {
     await persistProject();
     openTranscriptView();
     toast(keys.length === 1 ? 'Transcribed — 1 speaker detected' : `Transcribed — ${keys.length} speakers detected`);
+    return true;
   } catch (err) {
     const msg = String(err && err.message || err);
     if (/cancelled/i.test(msg)) toast('Transcription cancelled');
     else { console.error(err); toast(`Something went wrong: ${msg.split('\n')[0].replace(/^.*Error: /, '')}`, 6000); }
     showView('home');
     refreshHome();
+    return false;
   } finally {
     state.transcribing = false;
   }
@@ -325,6 +385,7 @@ window.verbatim.onModelProgress((p) => {
 els.btnCancel.addEventListener('click', () => {
   state.prepareCancelled = true; // covers the local decode stage
   window.verbatim.cancelTranscribe(); // covers downloads + the pipeline
+  if (state.fetchingUrl) window.verbatim.cancelUrlFetch();
 });
 
 /* ------------------------------------------------------------- project -- */
@@ -797,6 +858,7 @@ async function refreshHome() {
   state.platform = st.platform;
   state.version = st.version;
   state.modelsDir = st.modelsDir;
+  state.mediaDir = st.mediaDir;
   state.modelStorageBytes = st.modelStorageBytes;
   document.body.className = `platform-${st.platform === 'darwin' ? 'mac' : st.platform === 'win32' ? 'win' : 'linux'}`;
   renderLibrary();
@@ -824,7 +886,11 @@ function renderLibrary() {
     del.title = 'Delete transcript';
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm(`Delete transcript "${entry.title}"? The audio file is not touched.`)) return;
+      const fetchedAudio = entry.audioPath && state.mediaDir && entry.audioPath.startsWith(state.mediaDir);
+      const note = fetchedAudio
+        ? 'Its downloaded audio will be removed too.'
+        : 'The audio file is not touched.';
+      if (!confirm(`Delete transcript "${entry.title}"? ${note}`)) return;
       state.library = await window.verbatim.deleteProject(entry.id);
       renderLibrary();
     });
@@ -837,6 +903,13 @@ function renderLibrary() {
 /* file choosing */
 els.btnOpen.addEventListener('click', (e) => { e.stopPropagation(); els.fileInput.dataset.mode = 'new'; els.fileInput.click(); });
 els.dropzone.addEventListener('click', () => { els.fileInput.dataset.mode = 'new'; els.fileInput.click(); });
+
+/* link transcription */
+els.btnUrl.addEventListener('click', () => transcribeUrl(els.urlInput.value));
+els.urlInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') transcribeUrl(els.urlInput.value);
+  e.stopPropagation();
+});
 els.fileInput.addEventListener('change', async () => {
   const file = els.fileInput.files[0];
   els.fileInput.value = '';
@@ -868,7 +941,7 @@ els.fileInput.addEventListener('change', async () => {
   })
 );
 document.addEventListener('drop', (e) => {
-  if (els.viewHome.hidden || state.transcribing) return;
+  if (els.viewHome.hidden || busy()) return;
   const file = e.dataTransfer.files && e.dataTransfer.files[0];
   if (file) transcribeFile(file);
 });
@@ -941,6 +1014,7 @@ els.btnSettings.addEventListener('click', async () => {
   await refreshHome();
   renderSettings();
   els.settingsModal.hidden = false;
+  refreshYtdlpInfo(); // async — fills in when ready
 });
 els.btnSettingsClose.addEventListener('click', () => { els.settingsModal.hidden = true; });
 els.settingsModal.addEventListener('click', (e) => {
@@ -953,6 +1027,26 @@ els.selSpeakers.addEventListener('change', async () => {
   state.settings = await window.verbatim.setSettings({ numSpeakers: Number(els.selSpeakers.value) });
 });
 els.btnModelsFolder.addEventListener('click', () => window.verbatim.openModelsFolder());
+
+async function refreshYtdlpInfo() {
+  els.ytdlpInfo.textContent = 'checking…';
+  const info = await window.verbatim.urlToolInfo();
+  els.ytdlpInfo.textContent = info.version
+    ? `yt-dlp ${info.version}`
+    : 'downloads automatically on first use';
+}
+els.btnYtdlpUpdate.addEventListener('click', async () => {
+  els.btnYtdlpUpdate.disabled = true;
+  els.ytdlpInfo.textContent = 'updating…';
+  try {
+    const msg = await window.verbatim.urlToolUpdate();
+    toast(msg, 5000);
+  } catch (e) {
+    toast('Update failed — check your connection', 5000);
+  }
+  els.btnYtdlpUpdate.disabled = false;
+  refreshYtdlpInfo();
+});
 
 /* ------------------------------------------------------------ keyboard -- */
 
