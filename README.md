@@ -34,7 +34,7 @@ supported, with automatic language detection.
 ## Install
 
 - **macOS**: open the `.dmg` and drag Verbatim to Applications. The app is
-  unsigned — on first launch, right-click the app and choose **Open**.
+  unsigned — on first launch, right-click the app and choose **Open**. (I am NOT paying for Apple Developer license)
 - **Windows**: run the installer (Windows 10 1803 or later).
 
 ## Development
