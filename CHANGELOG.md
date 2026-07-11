@@ -2,7 +2,30 @@
 
 All notable changes to Verbatim. Versioning follows [SemVer](https://semver.org).
 
-## [1.1.0] — 2026-07-10
+## [2.0.0] — 2026-07-10
+
+**Full rewrite as a native Windows app** (C#/.NET 9 WinForms, same family as
+Photon), replacing the Electron version.
+
+### Changed
+- Single portable `Verbatim.exe` (~120 MB) with the transcription engines
+  embedded, plus a proper installer — both built by GitHub Actions.
+- Same dark UI, same features: named speakers, click-to-jump playback with
+  waveform, live transcript follow, search with in-text highlights, inline
+  editing, TXT/SRT/VTT/JSON export, auto-saved library, URL transcription
+  via yt-dlp with the Settings update button.
+- Your existing library, settings, and downloaded models carry over — the
+  on-disk format and location (`%APPDATA%\Verbatim`) are unchanged from 1.x.
+- Audio decoding now uses Windows Media Foundation: MP3, WAV, M4A, AAC, WMA,
+  FLAC (OGG/OPUS/WEBM need the free "Web Media Extensions" from the Microsoft
+  Store; URL fetches prefer M4A automatically).
+
+### Removed
+- **macOS support.** The Electron line ended with v1.1.0, which remains
+  downloadable.
+- Playback speed selector (returning in a future release).
+
+## [1.1.0] — 2026-07-10 *(final Electron release)*
 
 ### Added
 - **Transcribe from a link.** Paste a YouTube URL, a podcast episode link, or

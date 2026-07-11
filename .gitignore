@@ -1,4 +1,8 @@
+bin/
+obj/
+publish/
+installer/Output/
 node_modules/
 dist/
-npm-install.log
 .DS_Store
+npm-install.log

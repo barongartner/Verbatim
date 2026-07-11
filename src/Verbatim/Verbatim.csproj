@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Verbatim</RootNamespace>
+    <AssemblyName>Verbatim</AssemblyName>
+    <Version>2.0.0</Version>
+    <Company>The-Berin</Company>
+    <Product>Verbatim</Product>
+    <Description>Free, private, offline transcription with named speakers</Description>
+    <ApplicationIcon>Assets\verbatim.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Verbatim.Core\Verbatim.Core.csproj" />
+  </ItemGroup>
+
+  <!-- sherpa-onnx engines ride inside the single exe and are extracted to
+       LocalAppData on first run, keeping Verbatim.exe fully portable. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\vendor\win\bin\sherpa-onnx-offline.exe" Link="Engines\sherpa-onnx-offline.exe" LogicalName="engines.sherpa-onnx-offline.exe" />
+    <EmbeddedResource Include="..\..\vendor\win\bin\sherpa-onnx-offline-speaker-diarization.exe" Link="Engines\sherpa-onnx-offline-speaker-diarization.exe" LogicalName="engines.sherpa-onnx-offline-speaker-diarization.exe" />
+    <EmbeddedResource Include="..\..\vendor\win\bin\onnxruntime.dll" Link="Engines\onnxruntime.dll" LogicalName="engines.onnxruntime.dll" />
+    <EmbeddedResource Include="..\..\vendor\win\bin\onnxruntime_providers_shared.dll" Link="Engines\onnxruntime_providers_shared.dll" LogicalName="engines.onnxruntime_providers_shared.dll" />
+  </ItemGroup>
+
+</Project>
