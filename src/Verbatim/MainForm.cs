@@ -23,6 +23,8 @@ public sealed partial class MainForm : Form
 
     // home widgets
     private readonly TextBox _urlBox = new();
+    private readonly TextBox _libSearchBox = new();
+    private System.Windows.Forms.Timer? _libSearchTimer;
     private readonly FlowLayoutPanel _library = new()
     { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Width = 660 };
     private readonly Label _libraryHeader = new();
@@ -173,7 +175,19 @@ public sealed partial class MainForm : Form
         _libraryHeader.AutoSize = true;
         _libraryHeader.Margin = new Padding(0, 22, 0, 6);
 
-        foreach (var c in new Control[] { title, tagline, drop, urlRow, actions, _libraryHeader, _library })
+        Theme.StyleInput(_libSearchBox);
+        _libSearchBox.PlaceholderText = "Search all transcripts — titles, speakers, and every word…";
+        _libSearchBox.Width = 660;
+        _libSearchBox.TextChanged += (_, _) =>
+        {
+            _libSearchTimer ??= new System.Windows.Forms.Timer { Interval = 250 };
+            _libSearchTimer.Stop();
+            _libSearchTimer.Tick -= LibSearchTick;
+            _libSearchTimer.Tick += LibSearchTick;
+            _libSearchTimer.Start();
+        };
+
+        foreach (var c in new Control[] { title, tagline, drop, urlRow, actions, _libraryHeader, _libSearchBox, _library })
         {
             c.Margin = new Padding(0, c == title ? 0 : 10, 0, 0);
             col.Controls.Add(c);
@@ -201,11 +215,22 @@ public sealed partial class MainForm : Form
         OpenProject(p);
     }
 
+    private void LibSearchTick(object? s, EventArgs e)
+    {
+        _libSearchTimer?.Stop();
+        RefreshLibrary();
+    }
+
     private void RefreshLibrary()
     {
         _library.Controls.Clear();
-        var entries = _store.List();
-        _libraryHeader.Visible = entries.Count > 0;
+        var query = _libSearchBox.Text.Trim();
+        var entries = query.Length > 0 ? _store.Search(query) : _store.List();
+        _libraryHeader.Text = query.Length > 0
+            ? (entries.Count == 0 ? "No matches" : $"Matches — {entries.Count}")
+            : "Recent transcripts";
+        _libraryHeader.Visible = entries.Count > 0 || query.Length > 0;
+        _libSearchBox.Visible = entries.Count > 0 || query.Length > 0 || _store.List().Count > 0;
         foreach (var e in entries) _library.Controls.Add(MakeLibraryCard(e));
     }
 
@@ -501,6 +526,7 @@ public sealed partial class MainForm : Form
         menu.Items.Add("Text (.txt)", null, (_, _) => Export("txt"));
         menu.Items.Add("Subtitles (.srt)", null, (_, _) => Export("srt"));
         menu.Items.Add("Subtitles (.vtt)", null, (_, _) => Export("vtt"));
+        menu.Items.Add("Word (.docx)", null, (_, _) => Export("docx"));
         menu.Items.Add("Data (.json)", null, (_, _) => Export("json"));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Verbatim project…", null, (_, _) => Export("project"));
@@ -528,6 +554,20 @@ public sealed partial class MainForm : Form
         _waveform.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _waveform.SeekRequested += t => { _player.PositionSec = t; };
 
+        var speed = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor = Theme.Bg,
+            ForeColor = Theme.Text,
+            FlatStyle = FlatStyle.Flat,
+            Width = 68,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
+        speed.Items.AddRange(["0.75×", "1×", "1.25×", "1.5×", "2×"]);
+        speed.SelectedIndex = 1;
+        speed.SelectedIndexChanged += (_, _) =>
+            _player.Rate = speed.SelectedIndex switch { 0 => 0.75, 2 => 1.25, 3 => 1.5, 4 => 2.0, _ => 1.0 };
+
         var follow = new CheckBox { Text = "Follow", Appearance = Appearance.Button, Checked = true, AutoSize = true, Anchor = AnchorStyles.Top | AnchorStyles.Right };
         follow.FlatStyle = FlatStyle.Flat;
         follow.FlatAppearance.BorderColor = Theme.AccentDeep;
@@ -539,11 +579,12 @@ public sealed partial class MainForm : Form
             follow.ForeColor = follow.Checked ? Theme.Accent : Theme.TextDim;
         };
 
-        playerBar.Controls.AddRange([_playBtn, _timeNow, _waveform, _timeTotal, follow]);
+        playerBar.Controls.AddRange([_playBtn, _timeNow, _waveform, _timeTotal, speed, follow]);
         playerBar.Resize += (_, _) =>
         {
             follow.Location = new Point(playerBar.Width - follow.Width - 14, 20);
-            _timeTotal.Location = new Point(follow.Left - _timeTotal.Width - 10, 24);
+            speed.Location = new Point(follow.Left - speed.Width - 8, 20);
+            _timeTotal.Location = new Point(speed.Left - _timeTotal.Width - 10, 24);
             _waveform.SetBounds(112, 10, Math.Max(60, _timeTotal.Left - 122), 44);
         };
 
@@ -554,6 +595,7 @@ public sealed partial class MainForm : Form
             if (!_player.IsPlaying) _player.Play();
         };
         _view.Edited += ScheduleSave;
+        _view.RowContextRequested += ShowSegmentMenu;
 
         _player.PositionChanged += OnPlayerPosition;
         _player.PlaybackStateChanged += () => _playBtn.Text = _player.IsPlaying ? "⏸" : "▶";
@@ -614,11 +656,95 @@ public sealed partial class MainForm : Form
             Theme.StyleFlat(chip);
             chip.ForeColor = ColorTranslator.FromHtml(info.Color);
             chip.Click += (_, _) => RenameSpeaker(key);
+            var chipMenu = new ContextMenuStrip { BackColor = Theme.BgRaised, ForeColor = Theme.Text };
+            chipMenu.Items.Add("Rename…", null, (_, _) => RenameSpeaker(key));
+            var merge = new ToolStripMenuItem("Merge into");
+            foreach (var (otherKey, other) in _project.Speakers.Where(kv => kv.Key != key))
+            {
+                var mi = new ToolStripMenuItem(other.Name) { Tag = otherKey };
+                mi.Click += (_, _) =>
+                {
+                    if (MessageBox.Show(this,
+                            $"Move every \"{info.Name}\" line to \"{other.Name}\"? This can't be undone.",
+                            "Verbatim", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK)
+                        MergeSpeaker(key, (string)mi.Tag!);
+                };
+                merge.DropDownItems.Add(mi);
+            }
+            if (merge.DropDownItems.Count > 0) chipMenu.Items.Add(merge);
+            chip.ContextMenuStrip = chipMenu;
             _speakerBar.Controls.Add(chip);
         }
         var hint = MakeLabel("Click a speaker to rename · double-click text to edit", 8.5f, FontStyle.Regular, Theme.TextDim);
         hint.Margin = new Padding(16, 8, 0, 0);
         _speakerBar.Controls.Add(hint);
+    }
+
+    /// <summary>Right-click menu on a transcript row: reassign the line to
+    /// another (or a new) speaker, copy it, or delete it.</summary>
+    private void ShowSegmentMenu(int index, Point screenAt)
+    {
+        if (_project is null) return;
+        var seg = _project.Segments[index];
+        var menu = new ContextMenuStrip { BackColor = Theme.BgRaised, ForeColor = Theme.Text };
+
+        var assign = new ToolStripMenuItem("Speaker");
+        foreach (var (key, info) in _project.Speakers)
+        {
+            var item = new ToolStripMenuItem(info.Name) { Checked = key == seg.Speaker, Tag = key };
+            item.Click += (_, _) => ReassignSegment(index, (string)item.Tag!);
+            assign.DropDownItems.Add(item);
+        }
+        assign.DropDownItems.Add(new ToolStripSeparator());
+        assign.DropDownItems.Add(new ToolStripMenuItem("New speaker…", null, (_, _) =>
+        {
+            var name = PromptDialog.Show(this, "New speaker", "Speaker name:", "");
+            if (string.IsNullOrWhiteSpace(name)) return;
+            var newKey = $"speaker_{_project.Speakers.Count:D2}";
+            while (_project.Speakers.ContainsKey(newKey)) newKey += "x";
+            _project.Speakers[newKey] = new SpeakerInfo
+            {
+                Name = name.Trim(),
+                Color = SpeakerPalette.Color(_project.Speakers.Count)
+            };
+            ReassignSegment(index, newKey);
+        }));
+        menu.Items.Add(assign);
+        menu.Items.Add("Copy line", null, (_, _) =>
+            Clipboard.SetText($"[{Exporters.FmtTime(seg.Start)}] {_project.SpeakerName(seg.Speaker)}: {seg.Text}"));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Delete line", null, (_, _) =>
+        {
+            _project.Segments.RemoveAt(index);
+            AfterSpeakerChange();
+        });
+        menu.Show(screenAt);
+    }
+
+    private void ReassignSegment(int index, string speakerKey)
+    {
+        if (_project is null) return;
+        _project.Segments[index].Speaker = speakerKey;
+        AfterSpeakerChange();
+    }
+
+    /// <summary>Merge all of one speaker's lines into another and drop the source.</summary>
+    private void MergeSpeaker(string fromKey, string intoKey)
+    {
+        if (_project is null || fromKey == intoKey) return;
+        foreach (var s in _project.Segments.Where(s => s.Speaker == fromKey)) s.Speaker = intoKey;
+        _project.Speakers.Remove(fromKey);
+        AfterSpeakerChange();
+    }
+
+    private void AfterSpeakerChange()
+    {
+        if (_project is null) return;
+        // drop speakers that no longer own any lines only when merging created them
+        RebuildSpeakerBar();
+        _view.RecomputeMatches();
+        _view.InvalidateLayout();
+        ScheduleSave();
     }
 
     private void RenameSpeaker(string key)
@@ -665,6 +791,13 @@ public sealed partial class MainForm : Form
             };
             if (pd.ShowDialog(this) == DialogResult.OK)
                 File.WriteAllText(pd.FileName, System.Text.Json.JsonSerializer.Serialize(_project, Json.Options));
+            return;
+        }
+        if (fmt == "docx")
+        {
+            using var wd = new SaveFileDialog { FileName = SafeFilename(_project.Title) + ".docx", Filter = "Word document|*.docx" };
+            if (wd.ShowDialog(this) == DialogResult.OK)
+                File.WriteAllBytes(wd.FileName, DocxExporter.Build(_project));
             return;
         }
         var (content, ext, filter) = fmt switch
@@ -714,6 +847,11 @@ public sealed partial class MainForm : Form
         {
             e.SuppressKeyPress = true;
             _player.Toggle();
+        }
+        else if ((e.KeyCode is Keys.Left or Keys.Right) && !_searchBox.Focused && !_titleBox.Focused && _player.IsLoaded)
+        {
+            e.SuppressKeyPress = true;
+            _player.PositionSec += e.KeyCode == Keys.Right ? 5 : -5;
         }
     }
 }

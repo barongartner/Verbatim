@@ -1,12 +1,16 @@
 using NAudio.Wave;
+using SoundTouch.Net.NAudioSupport;
 
 namespace Verbatim.Audio;
 
-/// <summary>Simple audio player over NAudio: load a file, play/pause, seek.</summary>
+/// <summary>Audio player over NAudio: load a file, play/pause, seek, and
+/// pitch-preserving playback speed via SoundTouch.</summary>
 public sealed class Player : IDisposable
 {
     private WaveOutEvent? _output;
     private WaveStream? _reader;
+    private SoundTouchWaveProvider? _soundTouch;
+    private double _rate = 1.0;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 100 };
 
     public event Action? PositionChanged;
@@ -34,6 +38,17 @@ public sealed class Player : IDisposable
         if (_reader is not null && _reader.CurrentTime >= _reader.TotalTime) Pause();
     };
 
+    /// <summary>Playback speed (0.5–2.0), pitch preserved.</summary>
+    public double Rate
+    {
+        get => _rate;
+        set
+        {
+            _rate = Math.Clamp(value, 0.5, 2.0);
+            if (_soundTouch is not null) _soundTouch.Tempo = _rate;
+        }
+    }
+
     public bool Load(string path)
     {
         Unload();
@@ -42,8 +57,9 @@ public sealed class Player : IDisposable
             _reader = Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase)
                 ? new WaveFileReader(path)
                 : new MediaFoundationReader(path);
+            _soundTouch = new SoundTouchWaveProvider(_reader) { Tempo = _rate };
             _output = new WaveOutEvent { DesiredLatency = 200 };
-            _output.Init(_reader);
+            _output.Init(_soundTouch);
             return true;
         }
         catch
@@ -81,6 +97,7 @@ public sealed class Player : IDisposable
         _timer.Stop();
         _output?.Dispose();
         _output = null;
+        _soundTouch = null;
         _reader?.Dispose();
         _reader = null;
     }

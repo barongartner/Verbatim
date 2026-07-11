@@ -2,6 +2,18 @@
 
 All notable changes to Verbatim. Versioning follows [SemVer](https://semver.org).
 
+## [2.1.0] — 2026-07-10
+
+### Added
+- **Fix the diarizer's mistakes**: right-click any line to reassign it to
+  another speaker (or a brand-new one), copy it, or delete it; right-click a
+  speaker chip to merge that speaker into another.
+- **Search your whole library** from the home screen — titles, speaker names,
+  and every word of every transcript, with match snippets.
+- **Word export** (.docx) with colored speaker names and timestamps.
+- **Playback speed is back** (0.75×–2×), now pitch-preserving.
+- **Arrow-key seeking**: ←/→ skip 5 seconds during playback.
+
 ## [2.0.0] — 2026-07-10
 
 **Full rewrite as a native Windows app** (C#/.NET 9 WinForms, same family as

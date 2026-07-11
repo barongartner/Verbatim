@@ -149,6 +149,53 @@ public class ProjectStore(string userDir)
         return entries.OrderByDescending(e => e.UpdatedAt ?? "").ToList();
     }
 
+    /// <summary>Full-text search across the whole library: matches titles,
+    /// speaker names, and transcript text; the snippet shows the first hit.</summary>
+    public List<LibraryEntry> Search(string query)
+    {
+        query = query?.Trim() ?? "";
+        if (query.Length == 0) return List();
+        var results = new List<LibraryEntry>();
+        if (!Directory.Exists(TranscriptsDir)) return results;
+        foreach (var f in Directory.EnumerateFiles(TranscriptsDir, "*.json"))
+        {
+            try
+            {
+                var p = System.Text.Json.JsonSerializer.Deserialize<Project>(File.ReadAllText(f), Json.Options);
+                if (p?.Segments is null) continue;
+                var titleHit = p.Title.Contains(query, StringComparison.OrdinalIgnoreCase);
+                var speakerHit = p.Speakers.Values.Any(s => s.Name.Contains(query, StringComparison.OrdinalIgnoreCase));
+                var seg = p.Segments.FirstOrDefault(s => s.Text.Contains(query, StringComparison.OrdinalIgnoreCase));
+                if (!titleHit && !speakerHit && seg is null) continue;
+                var snippet = seg is not null ? SnippetAround(seg.Text, query)
+                    : p.Segments.Count > 0 ? p.Segments[0].Text[..Math.Min(160, p.Segments[0].Text.Length)] : "";
+                results.Add(new LibraryEntry
+                {
+                    Id = Path.GetFileNameWithoutExtension(f),
+                    Title = p.Title,
+                    AudioName = p.AudioName,
+                    AudioPath = p.AudioPath,
+                    DurationSec = p.DurationSec,
+                    CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt,
+                    SpeakerNames = p.Speakers.Values.Select(s => s.Name).ToList(),
+                    Snippet = snippet
+                });
+            }
+            catch { /* unreadable file — List() handles quarantine */ }
+        }
+        return results.OrderByDescending(e => e.UpdatedAt ?? "").ToList();
+    }
+
+    private static string SnippetAround(string text, string query)
+    {
+        var i = text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+        var from = Math.Max(0, i - 40);
+        var len = Math.Min(text.Length - from, 160);
+        var s = text.Substring(from, len);
+        return (from > 0 ? "…" : "") + s + (from + len < text.Length ? "…" : "");
+    }
+
     public void Delete(string id)
     {
         string? audioPath = null;

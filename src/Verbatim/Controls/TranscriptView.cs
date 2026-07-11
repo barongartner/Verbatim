@@ -34,6 +34,8 @@ public sealed class TranscriptView : UserControl
 
     public event Action<int>? TimeClicked;
     public event Action? Edited;
+    /// <summary>Right-click on a row: (segment index, screen location).</summary>
+    public event Action<int, Point>? RowContextRequested;
 
     // per-row layout cache
     private sealed class RowLayout
@@ -312,6 +314,11 @@ public sealed class TranscriptView : UserControl
         CommitEditor();
         int i = RowAt(e.Y);
         if (i < 0) return;
+        if (e.Button == MouseButtons.Right)
+        {
+            RowContextRequested?.Invoke(i, PointToScreen(e.Location));
+            return;
+        }
         if (e.X < SidePad + TimeColWidth) TimeClicked?.Invoke(i);
     }
 
