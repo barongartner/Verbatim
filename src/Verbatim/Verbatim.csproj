@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Verbatim</RootNamespace>
     <AssemblyName>Verbatim</AssemblyName>
-    <Version>2.1.0</Version>
+    <Version>2.2.0</Version>
     <Company>The-Berin</Company>
     <Product>Verbatim</Product>
     <Description>Free, private, offline transcription with named speakers</Description>

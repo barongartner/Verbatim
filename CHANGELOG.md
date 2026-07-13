@@ -2,6 +2,28 @@
 
 All notable changes to Verbatim. Versioning follows [SemVer](https://semver.org).
 
+## [2.2.0] — 2026-07-12
+
+### Added
+- **Record straight into Verbatim** — a new **🎙 Record** button on the home
+  screen captures audio and transcribes it like any file. Three sources:
+  - **Microphone** — record yourself or a room.
+  - **Computer audio** — capture online meetings (Zoom, Teams, Meet), calls, or
+    anything playing in any app, via WASAPI loopback. Nothing leaves your PC.
+  - **Microphone + computer audio** — both sides of a call, mixed together (the
+    default). Pick the exact input/output devices, watch a live level meter, and
+    stop when you're done.
+
+### Fixed
+- Whisper's `[BLANK_AUDIO]` marker no longer leaks into transcripts (joining the
+  existing `[Music]`/`(applause)`/`♪` filtering).
+- Diarization spans that overlap or nest no longer truncate a merged segment,
+  which could drop the audio (and words) in between.
+- SRT/VTT timestamps landing a hair under a whole second now carry correctly
+  instead of emitting a malformed 4-digit `,1000` milliseconds field.
+- Unexpected errors now show a message and write `%APPDATA%\Verbatim\error.log`
+  instead of the app closing silently.
+
 ## [2.1.0] — 2026-07-10
 
 ### Added

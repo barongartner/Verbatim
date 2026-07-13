@@ -156,6 +156,9 @@ public sealed partial class MainForm : Form
         urlRow.Controls.Add(urlBtn);
 
         var actions = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+        var recordBtn = new Button { Text = "🎙  Record…", AutoSize = true };
+        Theme.StyleFlat(recordBtn, primary: true);
+        recordBtn.Click += (_, _) => OpenRecorder();
         var openBtn = new Button { Text = "Open saved transcript…", AutoSize = true };
         Theme.StyleFlat(openBtn);
         openBtn.Click += (_, _) => OpenProjectFile();
@@ -166,6 +169,7 @@ public sealed partial class MainForm : Form
             using var dlg = new SettingsForm(_store, _models, _ytdlp);
             dlg.ShowDialog(this);
         };
+        actions.Controls.Add(recordBtn);
         actions.Controls.Add(openBtn);
         actions.Controls.Add(settingsBtn);
 
@@ -324,11 +328,20 @@ public sealed partial class MainForm : Form
         _progDetail.Text = detail;
     }
 
-    // ------------------------------------------------------- transcription --
-    private async Task TranscribeFileAsync(string path)
+    // ---------------------------------------------------------- recording --
+    private void OpenRecorder()
     {
         if (_job is not null) return;
-        _progFile.Text = Path.GetFileName(path);
+        using var dlg = new RecordDialog(_store.MediaDir);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.ResultPath is not null)
+            _ = TranscribeFileAsync(dlg.ResultPath, dlg.ResultTitle, fromMediaDir: true);
+    }
+
+    // ------------------------------------------------------- transcription --
+    private async Task TranscribeFileAsync(string path, string? displayTitle = null, bool fromMediaDir = false)
+    {
+        if (_job is not null) return;
+        _progFile.Text = displayTitle ?? Path.GetFileName(path);
         SetProgress("Preparing audio…", 2, "");
         ShowView(_progress);
         _job = new CancellationTokenSource();
@@ -338,9 +351,14 @@ public sealed partial class MainForm : Form
             if (decoded.DurationSec > 4 * 3600)
                 throw new InvalidOperationException("Files longer than 4 hours are not supported yet");
             var result = await RunPipelineAsync(decoded.Pcm16k, _job.Token);
-            FinishTranscription(result, path, Path.GetFileName(path), null, decoded);
+            if (fromMediaDir && result.Segments.Count == 0) _store.DiscardMediaIfUnreferenced(path);
+            FinishTranscription(result, path, Path.GetFileName(path), displayTitle, decoded);
         }
-        catch (Exception ex) { HandleJobError(ex, null); }
+        catch (Exception ex)
+        {
+            if (fromMediaDir) _store.DiscardMediaIfUnreferenced(path);
+            HandleJobError(ex, null);
+        }
         finally { _job?.Dispose(); _job = null; }
     }
 

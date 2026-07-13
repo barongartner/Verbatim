@@ -28,9 +28,11 @@ public static partial class Exporters
     /// <summary>HH:MM:SS{sep}mmm — comma separator for SRT, dot for VTT.</summary>
     private static string SrtTime(double t, char sep)
     {
-        int ms = (int)Math.Round(t % 1 * 1000, MidpointRounding.AwayFromZero);
-        int total = (int)Math.Floor(t);
-        int h = total / 3600, m = total % 3600 / 60, s = total % 60;
+        // Work in whole milliseconds so rounding carries into seconds instead of
+        // emitting a 4-digit ",1000" field (breaks SRT/VTT parsers).
+        long totalMs = (long)Math.Round(Math.Max(0, t) * 1000, MidpointRounding.AwayFromZero);
+        long ms = totalMs % 1000, total = totalMs / 1000;
+        long h = total / 3600, m = total % 3600 / 60, s = total % 60;
         return $"{h:00}:{m:00}:{s:00}{sep}{ms:000}";
     }
 

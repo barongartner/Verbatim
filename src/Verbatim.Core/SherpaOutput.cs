@@ -83,6 +83,9 @@ public static partial class SherpaOutput
     public static double? ParseProgress(string stderrLine)
     {
         var m = Progress().Match(stderrLine);
-        return m.Success ? double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) : null;
+        // TryParse: the [\d.]+ class can match a malformed "1.2.3"; a bad progress
+        // line must never fault the stderr-reading callback (a threadpool thread).
+        return m.Success && double.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var pct)
+            ? pct : null;
     }
 }

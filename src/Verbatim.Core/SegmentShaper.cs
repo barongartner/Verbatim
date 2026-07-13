@@ -22,7 +22,7 @@ public static partial class SegmentShaper
     [GeneratedRegex(@"^[[(][^\])]{0,40}[\])]$")]
     private static partial Regex BracketGroup();
 
-    [GeneratedRegex("music|applause|noise|silence|laughter|inaudible", RegexOptions.IgnoreCase)]
+    [GeneratedRegex("music|applause|noise|silence|laughter|inaudible|blank", RegexOptions.IgnoreCase)]
     private static partial Regex NoiseWord();
 
     [GeneratedRegex(@"^[♪♩♫♬\s]+$")]
@@ -47,7 +47,9 @@ public static partial class SegmentShaper
                 s.Start - last.End <= MergeGapSec &&
                 s.End - last.Start <= MaxChunkSec)
             {
-                last.End = s.End;
+                // never move End backwards: a same-speaker span contained inside
+                // the previous one would otherwise discard the audio in between.
+                last.End = Math.Max(last.End, s.End);
             }
             else
             {

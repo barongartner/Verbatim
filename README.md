@@ -7,10 +7,14 @@ Windows — with automatic speaker identification.
 
 [![Build](https://github.com/barongartner/Verbatim/actions/workflows/build.yml/badge.svg)](https://github.com/barongartner/Verbatim/actions/workflows/build.yml)
 
-Drop in an MP3, WAV, M4A, AAC, WMA, or FLAC recording — or paste a
-YouTube/podcast/any audio link — and Verbatim gives you a searchable,
-clickable transcript:
+Drop in an MP3, WAV, M4A, AAC, WMA, or FLAC recording, **record straight from
+the app**, or paste a YouTube/podcast/any audio link — and Verbatim gives you a
+searchable, clickable transcript:
 
+- **Record anything** — hit **🎙 Record** to capture your microphone, your
+  **computer's audio** (online meetings, calls, or anything playing in any app —
+  via WASAPI loopback), or **both mixed** for both sides of a call. Choose your
+  devices, watch the level meter, stop, and it transcribes automatically.
 - **Speaker detection** — figures out who spoke when, and you can give each
   speaker a real name (applies across the whole transcript).
 - **Click to jump** — click any line's timestamp to hear that exact moment;
